@@ -1,0 +1,85 @@
+# Real-Time 3D Gaussian Splatting - Python Dependencies
+
+# Core Python Dependencies
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Video Processing
+ffmpeg-python>=0.2.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Deep Learning & 3D Reconstruction
+torch>=2.1.0
+torchvision>=0.16.0
+numpy>=1.24.0,<2.0.0
+scipy>=1.11.0
+
+# Gaussian Splatting & 3D Vision
+# Note: Install gsplat from source or specific build for CUDA compatibility
+gsplat>=0.1.0  # May need: pip install git+https://github.com/nerfstudio-project/gsplat.git
+trimesh>=4.0.0
+plyfile>=1.0.0
+roma>=1.3.0  # Rotation and transformation utilities
+
+# DUST3r/MASt3r Dependencies
+# Note: These may require installation from source
+# MASt3r: https://github.com/naver/mast3r
+# DUST3r: https://github.com/naver/dust3r
+einops>=0.7.0
+huggingface-hub>=0.19.0
+gradio>=4.0.0  # For model downloads via HF
+
+# 3D Processing
+open3d>=0.18.0  # Point cloud processing
+pytorch3d; sys_platform != 'win32'  # 3D transforms (Linux/Mac builds easier)
+
+# Azure Cloud Storage
+azure-storage-blob>=12.19.0
+azure-identity>=1.15.0
+
+# Utilities
+tqdm>=4.66.0
+watchdog>=3.0.0  # File system monitoring
+psutil>=5.9.0  # System monitoring
+colorama>=0.4.6  # Colored console output (Windows)
+
+# Logging & Monitoring
+loguru>=0.7.0
+
+# Optional: RTMP Server Control (if managing MediaMTX via Python)
+requests>=2.31.0
+
+# Development Dependencies (Optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.0.0
+flake8>=6.1.0
+mypy>=1.5.0
+
+# Note: Manual Installation Steps
+# ================================
+# 1. Install CUDA Toolkit 11.8 or 12.1 from NVIDIA
+# 2. Install PyTorch with CUDA:
+#    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# 
+# 3. Install gsplat (may need compilation):
+#    pip install git+https://github.com/nerfstudio-project/gsplat.git
+#
+# 4. Install MASt3r/DUST3r from source:
+#    git clone https://github.com/naver/mast3r.git
+#    cd mast3r
+#    pip install -e .
+#    cd ..
+#    git clone https://github.com/naver/dust3r.git
+#    cd dust3r
+#    pip install -e .
+#
+# 5. For PyTorch3D on Windows (optional, only if needed):
+#    - Requires Visual Studio Build Tools
+#    - May need pre-built wheels from:
+#      https://github.com/facebookresearch/pytorch3d/releases
+#
+# 6. Download MediaMTX from:
+#    https://github.com/bluenviron/mediamtx/releases
+#    Extract to project root

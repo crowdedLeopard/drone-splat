@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DJI Drone - Live 3D Gaussian Splat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 350px;
+        }
+        
+        #info h3 {
+            margin-bottom: 15px;
+            color: #4a9eff;
+            font-size: 1.2em;
+        }
+        
+        #info p {
+            margin: 8px 0;
+            font-size: 0.9em;
+        }
+        
+        #info .label {
+            color: #888;
+            display: inline-block;
+            width: 100px;
+        }
+        
+        #info .value {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        #info a {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 15px;
+            background: #4a9eff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+        
+        #info a:hover {
+            background: #3a8eef;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #status {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.active {
+            background: #4caf50;
+        }
+        
+        .status-dot.waiting {
+            background: #ff9800;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.2em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>🚁 Drone Splat Viewer</h3>
+        <p><span class="label">Frames:</span> <span class="value" id="frame-count">0</span></p>
+        <p><span class="label">File size:</span> <span class="value" id="file-size">-</span></p>
+        <p><span class="label">Last update:</span> <span class="value" id="last-update">-</span></p>
+        <a href="https://playcanvas.com/supersplat" target="_blank">📤 Open in SuperSplat</a>
+    </div>
+    
+    <div id="status">
+        <span class="status-dot waiting"></span>
+        <span id="status-text">Waiting for splat data...</span>
+    </div>
+    
+    <div id="canvas-container">
+        <div id="instructions">
+            Waiting for .ply file from reconstruction...
+            <br><br>
+            <small>This viewer will auto-update when new data arrives</small>
+        </div>
+        <canvas id="canvas"></canvas>
+    </div>
+    
+    <script type="module">
+        // Simple WebGL viewer for 3D Gaussian Splatting
+        // Uses basic point cloud rendering until proper viewer is integrated
+        
+        const canvas = document.getElementById('canvas');
+        const frameCount = document.getElementById('frame-count');
+        const fileSize = document.getElementById('file-size');
+        const lastUpdate = document.getElementById('last-update');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.querySelector('.status-dot');
+        const instructions = document.getElementById('instructions');
+        
+        let currentFile = null;
+        
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/api/latest');
+                const data = await response.json();
+                
+                if (data.filename && data.filename !== currentFile) {
+                    currentFile = data.filename;
+                    loadSplatFile(data);
+                }
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+            }
+        }
+        
+        function loadSplatFile(info) {
+            instructions.style.display = 'none';
+            frameCount.textContent = info.count;
+            fileSize.textContent = formatBytes(info.size);
+            lastUpdate.textContent = new Date(info.modified * 1000).toLocaleTimeString();
+            
+            statusDot.className = 'status-dot active';
+            statusText.textContent = `Loaded: ${info.filename}`;
+            
+            console.log('Loading splat file:', info.path);
+            
+            // For demo: just show that we detected the file
+            // In production, integrate antimatter15/splat or similar viewer
+            renderPlaceholder(info);
+        }
+        
+        function renderPlaceholder(info) {
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#4a9eff';
+            ctx.font = '24px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('3D Gaussian Splat', canvas.width / 2, canvas.height / 2 - 40);
+            
+            ctx.fillStyle = '#888';
+            ctx.font = '16px monospace';
+            ctx.fillText(info.filename, canvas.width / 2, canvas.height / 2);
+            ctx.fillText(`${info.count} frames loaded`, canvas.width / 2, canvas.height / 2 + 30);
+            
+            ctx.fillStyle = '#666';
+            ctx.font = '14px monospace';
+            ctx.fillText('Integrate antimatter15/splat or SuperSplat for 3D rendering', canvas.width / 2, canvas.height / 2 + 80);
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Poll for updates every 2 seconds
+        setInterval(checkForUpdates, 2000);
+        checkForUpdates();
+        
+        // Handle canvas resize
+        window.addEventListener('resize', () => {
+            if (currentFile) {
+                renderPlaceholder({ filename: currentFile, count: parseInt(frameCount.textContent) });
+            }
+        });
+    </script>
+    
+    <!-- 
+    To integrate full 3D Gaussian Splatting viewer:
+    1. Add antimatter15/splat library: https://github.com/antimatter15/splat
+    2. Or embed SuperSplat viewer: https://github.com/playcanvas/supersplat
+    3. Replace renderPlaceholder() with proper WebGL rendering
+    -->
+</body>
+</html>

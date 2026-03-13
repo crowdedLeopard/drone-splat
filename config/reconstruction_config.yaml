@@ -1,0 +1,38 @@
+# 3D Gaussian Splatting Reconstruction Configuration
+# For drone video stream reconstruction on Windows 11
+
+# Output settings
+output_dir: './output/reconstructions'
+output_format: 'ply'  # Options: 'ply', 'splat'
+
+# Reconstruction timing
+reconstruction_interval: 5.0  # Seconds between reconstruction updates
+min_keyframes: 10  # Minimum keyframes before first reconstruction
+
+# Frame selection settings
+frame_selector:
+  min_interval: 0.5      # Minimum seconds between keyframes
+  max_interval: 2.0      # Force keyframe after this many seconds
+  motion_threshold: 5.0  # Optical flow threshold in pixels
+  max_keyframes: 50      # Maximum keyframes in sliding window
+
+# Camera pose estimation
+pose_estimator:
+  focal_length: null           # Auto-estimate from image size (or specify in pixels)
+  principal_point: null        # Auto-use image center (or specify [cx, cy])
+  feature_detector: 'sift'     # Options: 'sift', 'orb' (SIFT recommended)
+  min_features: 100            # Minimum features for pose estimation
+  ransac_threshold: 1.0        # RANSAC inlier threshold in pixels
+
+# Gaussian training
+gaussian_trainer:
+  num_iterations: 300    # Optimization iterations (100-1000)
+  learning_rate: 0.01    # Adam learning rate
+  sh_degree: 3           # Spherical harmonics degree (max 3)
+  densify_interval: 100  # Iterations between densification (future)
+  device: 'cuda'         # Options: 'cuda', 'cpu'
+
+# Notes:
+# - Demo quality: 300 iterations, 4GB VRAM
+# - Good quality: 500 iterations, 8GB VRAM
+# - High quality: 1000+ iterations, 12GB+ VRAM

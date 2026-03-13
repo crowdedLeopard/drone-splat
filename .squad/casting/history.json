@@ -1,0 +1,12 @@
+{
+  "assignments": [
+    {
+      "assignment_id": "splatting-001",
+      "universe": "The Expanse",
+      "project": "Real-time 3D Gaussian Splatting from DJI RTMP stream",
+      "created_at": "2026-03-13T15:42:44Z",
+      "agents": ["holden","naomi","amos","alex","bobbie"],
+      "exemptions": ["scribe","ralph"]
+    }
+  ]
+}

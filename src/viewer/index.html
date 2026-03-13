@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Gaussian Splatting Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #viewer-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 300px;
+        }
+        
+        .status {
+            margin-bottom: 10px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.loading {
+            background: #ffa500;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-indicator.ready {
+            background: #00ff00;
+        }
+        
+        .status-indicator.error {
+            background: #ff0000;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .controls {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        .controls h4 {
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        
+        .controls p {
+            margin: 4px 0;
+        }
+        
+        .info {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        #loading-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #0080ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="viewer-container">
+        <canvas id="canvas"></canvas>
+        
+        <div class="overlay">
+            <div class="status">
+                <span class="status-indicator loading" id="status-indicator"></span>
+                <span id="status-text">Waiting for reconstruction...</span>
+            </div>
+            
+            <div class="controls">
+                <h4>Controls:</h4>
+                <p><strong>Left Mouse:</strong> Rotate</p>
+                <p><strong>Right Mouse:</strong> Pan</p>
+                <p><strong>Scroll:</strong> Zoom</p>
+            </div>
+            
+            <div class="info">
+                <p id="point-count">Points: -</p>
+                <p id="file-info">File: -</p>
+                <p id="last-update">Last Update: -</p>
+            </div>
+        </div>
+        
+        <div id="loading-message">
+            <div class="spinner"></div>
+            <h2>Initializing Viewer...</h2>
+            <p style="color: #888; margin-top: 10px;">Waiting for .splat file</p>
+        </div>
+    </div>
+    
+    <script type="module">
+        // TODO (Bobbie): Implement actual Gaussian Splatting viewer
+        // This is a placeholder - actual implementation would use:
+        // - Three.js or similar WebGL framework
+        // - Gaussian Splatting shader
+        // - .splat or .ply file parser
+        // - Camera controls
+        // - Auto-refresh on file update
+        
+        console.log('Gaussian Splatting Viewer initialized');
+        console.log('Waiting for implementation by Bobbie...');
+        
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const loadingMessage = document.getElementById('loading-message');
+        const pointCount = document.getElementById('point-count');
+        const fileInfo = document.getElementById('file-info');
+        const lastUpdate = document.getElementById('last-update');
+        
+        // Placeholder: Check for .splat file periodically
+        async function checkForFile() {
+            try {
+                // TODO: Implement actual file checking and loading
+                const response = await fetch('../data/output/reconstruction.splat');
+                
+                if (response.ok) {
+                    statusIndicator.className = 'status-indicator ready';
+                    statusText.textContent = 'Reconstruction loaded';
+                    loadingMessage.style.display = 'none';
+                    
+                    const blob = await response.blob();
+                    fileInfo.textContent = `File: reconstruction.splat (${(blob.size / 1024 / 1024).toFixed(2)} MB)`;
+                    lastUpdate.textContent = `Last Update: ${new Date().toLocaleTimeString()}`;
+                    
+                    // TODO: Parse and render .splat file
+                    console.log('File found, size:', blob.size);
+                } else {
+                    statusIndicator.className = 'status-indicator loading';
+                    statusText.textContent = 'Waiting for reconstruction...';
+                }
+            } catch (error) {
+                statusIndicator.className = 'status-indicator loading';
+                statusText.textContent = 'Waiting for reconstruction...';
+            }
+        }
+        
+        // Check every 2 seconds (matches auto_refresh_interval in config)
+        setInterval(checkForFile, 2000);
+        checkForFile();
+        
+        // Initialize canvas and camera (placeholder)
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // Placeholder rendering
+        function render() {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // TODO: Actual Gaussian Splatting rendering
+            
+            requestAnimationFrame(render);
+        }
+        
+        render();
+    </script>
+</body>
+</html>

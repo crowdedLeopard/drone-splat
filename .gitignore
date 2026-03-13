@@ -1,0 +1,74 @@
+# Squad: ignore runtime state (logs, inbox, sessions)
+.squad/orchestration-log/
+.squad/log/
+.squad/decisions/inbox/
+.squad/sessions/
+# Squad: SubSquad activation file (local to this machine)
+.squad-workstream
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+
+# Output files (splat/ply can be large)
+output/
+*.ply
+*.splat
+*.pcd
+
+# Downloaded tools / binaries
+tools/
+*.exe
+
+# CUDA build artifacts
+*.o
+*.so
+*.dll
+*.cu.obj
+
+# PyTorch / ML checkpoints
+*.pt
+*.pth
+checkpoint/
+checkpoints/
+
+# Blender temp files
+*.blend1
+*.blend2
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp / logs
+tmp/
+temp/
+*.tmp
+*.log
+
+# Node (web viewer)
+node_modules/

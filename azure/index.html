@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Drone 3D Gaussian Splat Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 48px;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 12px;
+            font-size: 2.2em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 1.1em;
+        }
+        .file-info {
+            background: #f5f5f5;
+            border-left: 4px solid #667eea;
+            padding: 16px;
+            margin: 24px 0;
+            border-radius: 4px;
+            text-align: left;
+        }
+        .file-info p {
+            margin: 8px 0;
+            font-size: 0.95em;
+        }
+        .file-name {
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: #764ba2;
+            font-weight: 600;
+            word-break: break-all;
+        }
+        .loading {
+            color: #999;
+            font-style: italic;
+        }
+        .error {
+            color: #e74c3c;
+            background: #fadbd8;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 16px 0;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 32px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+        .btn-secondary:hover {
+            background: #e8e8e8;
+            border-color: #bbb;
+        }
+        .info-section {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #eee;
+            text-align: left;
+        }
+        .info-section h3 {
+            color: #667eea;
+            margin-bottom: 12px;
+        }
+        .info-section p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .code-block {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 12px 0;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+        .file-list {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            margin: 12px 0;
+        }
+        .file-list-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+        .file-list-item:last-child {
+            border-bottom: none;
+        }
+        .file-list-item a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .file-list-item a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Real-time Drone 3D Gaussian Splat</h1>
+        <p class="subtitle">Interactive 3D model viewer powered by Azure Blob Storage</p>
+
+        <div class="file-info">
+            <p>Latest Model:</p>
+            <p id="latest-file" class="file-name loading">Loading...</p>
+        </div>
+
+        <div id="error-container"></div>
+
+        <div class="action-buttons">
+            <a href="https://playcanvas.com/supersplat" target="_blank" class="btn btn-primary">
+                📊 Open in SuperSplat Viewer
+            </a>
+            <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh Files</button>
+        </div>
+
+        <div class="info-section">
+            <h3>📁 Available Files</h3>
+            <div id="file-list" class="file-list">
+                <div class="loading">Loading file list...</div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>💡 How to Use</h3>
+            <p>1. Upload a .ply or .splat file using the local uploader</p>
+            <p>2. Files will appear here and be accessible via public URL</p>
+            <p>3. Click a file link or use the SuperSplat viewer to inspect models</p>
+            <p>4. Share the direct blob URL for remote viewing</p>
+        </div>
+
+        <div class="info-section">
+            <h3>🔗 Direct Blob Access</h3>
+            <div class="code-block" id="blob-url">
+                https://[storage-account].blob.core.windows.net/splats/
+            </div>
+            <p style="font-size: 0.9em; color: #999;">
+                Replace [storage-account] with your actual storage account name
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const containerUrl = getContainerUrl();
+
+        async function getContainerUrl() {
+            // Extract storage account from the current domain or use default
+            const hostname = window.location.hostname;
+            if (hostname.includes('.blob.core.windows.net')) {
+                const parts = hostname.split('.');
+                return `https://${parts[0]}.blob.core.windows.net/splats/`;
+            }
+            // Fallback for local development
+            return null;
+        }
+
+        async function listBlobs() {
+            if (!containerUrl) {
+                document.getElementById('file-list').innerHTML =
+                    '<div class="error">Unable to determine blob container URL. ' +
+                    'This page should be served from Azure Blob Storage static website.</div>';
+                return;
+            }
+
+            try {
+                // Fetch blob list via REST API (public access enabled)
+                const response = await fetch(`${containerUrl}?restype=container&comp=list`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const xml = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xml, 'application/xml');
+                const blobs = doc.querySelectorAll('Blob');
+
+                if (blobs.length === 0) {
+                    document.getElementById('file-list').innerHTML =
+                        '<div class="loading">No files uploaded yet</div>';
+                    document.getElementById('latest-file').textContent = 'None';
+                    return;
+                }
+
+                // Sort by LastModified (newest first)
+                const blobArray = Array.from(blobs).map(blob => ({
+                    name: blob.querySelector('Name').textContent,
+                    modified: new Date(blob.querySelector('Properties LastModified').textContent),
+                    size: parseInt(blob.querySelector('Properties ContentLength').textContent)
+                })).sort((a, b) => b.modified - a.modified);
+
+                // Display latest
+                const latest = blobArray[0];
+                const latestLink = `${containerUrl}${latest.name}`;
+                document.getElementById('latest-file').innerHTML =
+                    `<a href="${latestLink}" target="_blank">${latest.name}</a>`;
+
+                // Display file list
+                const listHtml = blobArray.map(blob => {
+                    const url = `${containerUrl}${blob.name}`;
+                    const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+                    return `<div class="file-list-item">
+                        <a href="${url}" target="_blank">${blob.name}</a>
+                        <br><small style="color: #999;">${sizeMB} MB • ${blob.modified.toLocaleString()}</small>
+                    </div>`;
+                }).join('');
+
+                document.getElementById('file-list').innerHTML = listHtml;
+
+            } catch (error) {
+                document.getElementById('file-list').innerHTML =
+                    `<div class="error">Error loading files: ${error.message}</div>`;
+                document.getElementById('latest-file').textContent = 'Error';
+            }
+        }
+
+        // Load files on page load
+        document.addEventListener('DOMContentLoaded', listBlobs);
+
+        // Refresh button
+        document.getElementById('refresh-btn').addEventListener('click', listBlobs);
+
+        // Update blob URL display
+        document.addEventListener('DOMContentLoaded', () => {
+            if (containerUrl) {
+                document.getElementById('blob-url').textContent = containerUrl;
+            }
+        });
+    </script>
+</body>
+</html>

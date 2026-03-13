@@ -1,0 +1,162 @@
+# Real-Time 3D Gaussian Splatting Configuration
+
+# RTMP Server Settings
+rtmp:
+  # MediaMTX server address (localhost for local server)
+  host: "0.0.0.0"
+  port: 1935
+  
+  # Stream path configuration
+  # Full URL will be: rtmp://<your-ip>:1935/live/drone
+  app: "live"
+  stream_key: "drone"
+  
+  # Connection timeout in seconds
+  timeout: 30
+
+# Frame Extraction Settings
+ingestion:
+  # Frame extraction rate (fps)
+  # Lower = less compute, but less frequent reconstruction updates
+  # Higher = more data, but slower reconstruction
+  # Recommended: 2-5 fps for balance
+  frame_rate: 3
+  
+  # Frame resolution (will resize if needed)
+  # null = use source resolution from drone
+  # [width, height] = resize to specific resolution
+  resolution: null  # e.g., [1280, 720]
+  
+  # Output directory for extracted frames
+  frames_dir: "data/frames"
+  
+  # Frame format
+  frame_format: "jpg"
+  frame_quality: 85  # JPEG quality (1-100)
+  
+  # Buffer settings
+  max_frames_buffer: 100  # Maximum frames to keep in buffer
+  cleanup_old_frames: true  # Delete frames after reconstruction
+
+# 3D Reconstruction Settings
+reconstruction:
+  # Reconstruction method
+  # Options: "dust3r", "mast3r", "splatam"
+  method: "mast3r"
+  
+  # Sliding window size (number of frames to use per reconstruction update)
+  window_size: 10
+  
+  # Overlap between windows (for continuity)
+  window_overlap: 3
+  
+  # Reconstruction update frequency
+  # "continuous" = update as soon as new frames available
+  # "interval" = update every N seconds
+  update_mode: "continuous"
+  update_interval_sec: 5  # only used if update_mode == "interval"
+  
+  # GPU settings
+  device: "cuda"  # "cuda" or "cpu" (cpu not recommended)
+  cuda_device_id: 0  # GPU device ID if multiple GPUs
+  
+  # Model settings
+  model_weights_dir: "data/models"  # Where to cache downloaded model weights
+  precision: "fp16"  # "fp32" or "fp16" (half precision for speed)
+  
+  # Output settings
+  output_dir: "data/output"
+  output_format: "splat"  # "splat" or "ply"
+  output_filename: "reconstruction.splat"
+  
+  # Advanced reconstruction parameters
+  max_depth: 100.0  # Maximum depth in meters
+  min_confidence: 0.5  # Minimum confidence threshold for points
+  
+  # SLAM settings (if using SplaTAM or similar)
+  slam:
+    enable_loop_closure: false
+    keyframe_interval: 5
+    mapping_iterations: 10
+
+# Viewer Settings
+viewer:
+  # Viewer type: "web" or "blender"
+  type: "web"
+  
+  # Web viewer settings
+  web:
+    host: "localhost"
+    port: 8000
+    auto_refresh_interval: 2000  # milliseconds
+  
+  # Blender settings (if using Blender)
+  blender:
+    executable_path: "C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe"
+    auto_reload: false
+
+# Azure Settings (Optional)
+azure:
+  enabled: false  # Set to true to enable Azure upload
+  
+  # Storage account settings
+  storage:
+    # Connection string (can also be set via AZURE_STORAGE_CONNECTION_STRING env var)
+    connection_string: ""  # Leave empty to use environment variable
+    
+    # Container name
+    container_name: "gaussian-splats"
+    
+    # Upload settings
+    upload_interval_sec: 30  # Upload every N seconds
+    upload_on_update: true  # Upload immediately after reconstruction update
+    
+    # Blob naming
+    blob_prefix: "demo"  # Prefix for blob names
+    use_timestamp: true  # Append timestamp to blob names
+
+# Logging Settings
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  
+  # Log to file
+  file:
+    enabled: true
+    path: "data/logs/pipeline.log"
+    max_size_mb: 100
+    backup_count: 5
+  
+  # Log to console
+  console:
+    enabled: true
+    colorized: true
+
+# Pipeline Settings
+pipeline:
+  # Graceful shutdown timeout (seconds)
+  shutdown_timeout: 30
+  
+  # Health check interval (seconds)
+  health_check_interval: 10
+  
+  # Auto-restart on errors
+  auto_restart_ingestion: true
+  auto_restart_reconstruction: false  # Reconstruction errors usually need manual intervention
+  
+  # Performance monitoring
+  monitor_performance: true
+  report_interval_sec: 60  # Report stats every N seconds
+
+# Development/Debug Settings
+debug:
+  # Save intermediate results
+  save_intermediate: false
+  intermediate_dir: "data/debug"
+  
+  # Visualization
+  visualize_frames: false
+  visualize_depth: false
+  
+  # Profiling
+  enable_profiling: false
+  profile_output: "data/profile.json"

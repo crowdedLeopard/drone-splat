@@ -1,0 +1,35 @@
+# mediamtx configuration for RTMP ingest from DJI drone
+# https://github.com/bluenviron/mediamtx
+
+logLevel: info
+logDestinations: [stdout]
+
+# RTMP server configuration
+rtmp: yes
+rtmpAddress: :1935
+rtmpEncryption: "no"
+rtmpServerKey: ""
+rtmpServerCert: ""
+
+# Disable other protocols (we only need RTMP)
+rtsp: no
+hls: no
+webrtc: no
+
+# Path configuration
+paths:
+  # DJI drone stream endpoint
+  # Stream URL: rtmp://<your-ip>:1935/live/drone
+  live/drone:
+    source: publisher
+    sourceOnDemand: no
+    runOnReady: ""
+    runOnReadyRestart: no
+    runOnRead: ""
+    runOnReadRestart: no
+    
+  # Alternative path for testing
+  # Stream URL: rtmp://<your-ip>:1935/test/stream
+  test/stream:
+    source: publisher
+    sourceOnDemand: no
