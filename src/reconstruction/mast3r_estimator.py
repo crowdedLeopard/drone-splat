@@ -149,8 +149,8 @@ class MASt3rEstimator:
             
             for i, (pts, conf, img) in enumerate(zip(points_3d, confidences, images)):
                 # pts is (H, W, 3) in camera space
-                pts_np = pts.cpu().numpy()
-                conf_np = conf.cpu().numpy()
+                pts_np = pts.detach().cpu().numpy()
+                conf_np = conf.detach().cpu().numpy()
                 
                 H, W = pts_np.shape[:2]
                 pts_flat = pts_np.reshape(-1, 3)
@@ -184,8 +184,8 @@ class MASt3rEstimator:
                 points=points,
                 colors=colors,
                 confidences=confidences,
-                poses=[p.cpu().numpy() for p in poses],
-                intrinsics=[k.cpu().numpy() for k in intrinsics]
+                poses=[p.detach().cpu().numpy() for p in poses],
+                intrinsics=[k.detach().cpu().numpy() for k in intrinsics]
             )
             
         finally:
