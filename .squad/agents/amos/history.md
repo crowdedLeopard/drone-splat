@@ -61,3 +61,39 @@ Frames delivered to `threading.Queue` as dict with numpy BGR array, timestamp, f
 - Integrate with Naomi's reconstruction queue consumer
 - Consider resolution auto-detection
 
+### Dependency Fixes (2025-01-XX)
+
+**Problem Identified:**
+- Missing packages: loguru, opencv-python, watchdog, colorama, tqdm, requests, plyfile
+- Wrong azure-storage-blob version: v2.1.0 installed but code uses v12 API (BlobServiceClient)
+- requirements.txt had incorrect numpy constraint (<2.0.0 but 2.3.5 installed)
+- requirements.txt included problematic packages (pytorch3d, gradio, open3d) causing Windows install issues
+- verify_reconstruction.py had Unicode encoding issues (✓/✗ chars fail on Windows cp1252)
+
+**Actions Taken:**
+- Installed missing packages: loguru 0.7.3, watchdog 6.0.0, plyfile 1.1.3
+- Upgraded azure-storage-blob from 2.1.0 → 12.28.0 (v12 API)
+- Updated requirements.txt:
+  - Removed numpy version upper limit (<2.0.0)
+  - Commented out pytorch3d, gradio, open3d (not needed for core demo)
+- Fixed verify_reconstruction.py: replaced Unicode chars (✓→[OK], ✗→[FAIL], ⚠→[WARN])
+- Created scripts\install_deps.ps1 for easy dependency installation
+- Verified all imports work correctly
+
+**Key Findings:**
+- opencv-python, colorama, tqdm, requests were already installed
+- Azure SDK v12 upgrade successful despite paconn conflict warning (unrelated to project)
+- NumPy 2.x compatibility: No issues found with current codebase despite requirements specifying <2.0.0
+
+**Testing:**
+- Core imports verified: loguru, cv2, watchdog ✓
+- Azure SDK v12 import verified: BlobServiceClient ✓
+
+**Files Modified:**
+- requirements.txt (numpy constraint, removed problematic packages)
+- verify_reconstruction.py (Unicode → ASCII replacements)
+- scripts\install_deps.ps1 (created)
+
+**Decision Document:**
+- `.squad\decisions\inbox\amos-dep-fixes.md`
+

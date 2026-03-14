@@ -24,9 +24,9 @@ try:
         GaussianTrainer,
         PLYWriter
     )
-    print("✓ All modules imported successfully")
+    print("[OK] All modules imported successfully")
 except ImportError as e:
-    print(f"✗ Import failed: {e}")
+    print(f"[FAIL] Import failed: {e}")
     sys.exit(1)
 
 print()
@@ -45,9 +45,9 @@ try:
     frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
     result = frame_selector.add_frame(frame, 0.0)
     
-    print(f"✓ FrameSelector initialized and working (first frame: {result})")
+    print(f"[OK] FrameSelector initialized and working (first frame: {result})")
 except Exception as e:
-    print(f"✗ FrameSelector failed: {e}")
+    print(f"[FAIL] FrameSelector failed: {e}")
 
 print()
 
@@ -58,9 +58,9 @@ try:
         'feature_detector': 'sift',
         'min_features': 50,
     })
-    print("✓ PoseEstimator initialized")
+    print("[OK] PoseEstimator initialized")
 except Exception as e:
-    print(f"✗ PoseEstimator failed: {e}")
+    print(f"[FAIL] PoseEstimator failed: {e}")
 
 print()
 
@@ -68,9 +68,9 @@ print()
 print("[4/6] Testing PLYWriter...")
 try:
     ply_writer = PLYWriter()
-    print("✓ PLYWriter initialized")
+    print("[OK] PLYWriter initialized")
 except Exception as e:
-    print(f"✗ PLYWriter failed: {e}")
+    print(f"[FAIL] PLYWriter failed: {e}")
 
 print()
 
@@ -88,16 +88,16 @@ try:
     # This will fail if gsplat not installed, which is expected
     try:
         gaussian_trainer = GaussianTrainer(trainer_config)
-        print(f"✓ GaussianTrainer initialized (device: {trainer_config['device']})")
+        print(f"[OK] GaussianTrainer initialized (device: {trainer_config['device']})")
     except RuntimeError as e:
         if "gsplat" in str(e):
-            print(f"⚠ GaussianTrainer: gsplat not installed (expected on first run)")
+            print(f"[WARN] GaussianTrainer: gsplat not installed (expected on first run)")
             print(f"  Run: scripts\\install_reconstruction.bat")
         else:
             raise
             
 except Exception as e:
-    print(f"✗ GaussianTrainer failed: {e}")
+    print(f"[FAIL] GaussianTrainer failed: {e}")
 
 print()
 
@@ -114,15 +114,15 @@ try:
     # Skip gaussian_trainer if gsplat not available
     try:
         reconstructor = GaussianReconstructor(config)
-        print("✓ GaussianReconstructor initialized")
+        print("[OK] GaussianReconstructor initialized")
     except RuntimeError as e:
         if "gsplat" in str(e):
-            print("⚠ GaussianReconstructor: Skipped (gsplat not installed)")
+            print("[WARN] GaussianReconstructor: Skipped (gsplat not installed)")
         else:
             raise
             
 except Exception as e:
-    print(f"✗ GaussianReconstructor failed: {e}")
+    print(f"[FAIL] GaussianReconstructor failed: {e}")
 
 print()
 print("=" * 60)
@@ -135,46 +135,46 @@ print("Checking dependencies...")
 
 try:
     import torch
-    print(f"✓ PyTorch {torch.__version__}")
+    print(f"[OK] PyTorch {torch.__version__}")
     print(f"  CUDA available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"  GPU: {torch.cuda.get_device_name(0)}")
         vram = torch.cuda.get_device_properties(0).total_memory / 1e9
         print(f"  VRAM: {vram:.1f} GB")
 except ImportError:
-    print("✗ PyTorch not installed")
+    print("[FAIL] PyTorch not installed")
     print("  Run: pip install torch --index-url https://download.pytorch.org/whl/cu118")
 
 try:
     import cv2
-    print(f"✓ OpenCV {cv2.__version__}")
+    print(f"[OK] OpenCV {cv2.__version__}")
 except ImportError:
-    print("✗ OpenCV not installed")
+    print("[FAIL] OpenCV not installed")
     print("  Run: pip install opencv-python")
 
 try:
     import numpy
-    print(f"✓ NumPy {numpy.__version__}")
+    print(f"[OK] NumPy {numpy.__version__}")
 except ImportError:
-    print("✗ NumPy not installed")
+    print("[FAIL] NumPy not installed")
 
 try:
     import scipy
-    print(f"✓ SciPy {scipy.__version__}")
+    print(f"[OK] SciPy {scipy.__version__}")
 except ImportError:
-    print("✗ SciPy not installed")
+    print("[FAIL] SciPy not installed")
 
 try:
     import yaml
-    print(f"✓ PyYAML installed")
+    print(f"[OK] PyYAML installed")
 except ImportError:
-    print("✗ PyYAML not installed")
+    print("[FAIL] PyYAML not installed")
 
 try:
     import gsplat
-    print(f"✓ gsplat installed")
+    print(f"[OK] gsplat installed")
 except ImportError:
-    print("⚠ gsplat not installed (required for Gaussian training)")
+    print("[WARN] gsplat not installed (required for Gaussian training)")
     print("  Run: scripts\\install_reconstruction.bat")
 
 print()
@@ -182,9 +182,9 @@ print("=" * 60)
 print()
 
 if cuda_available:
-    print("✓ System ready for GPU-accelerated reconstruction")
+    print("[OK] System ready for GPU-accelerated reconstruction")
 else:
-    print("⚠ No CUDA GPU detected - reconstruction will be slow on CPU")
+    print("[WARN] No CUDA GPU detected - reconstruction will be slow on CPU")
 
 print()
 print("Next steps:")

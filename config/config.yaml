@@ -96,15 +96,17 @@ viewer:
     auto_reload: false
 
 # Azure Settings (Optional)
+# Provisioned storage account: dronesplat4014 in rg-drone-splat-demo (Australia East)
+# Cost: ~$0.02/GB/month (Standard_LRS), free for first 10,000 operations
 azure:
-  enabled: false  # Set to true to enable Azure upload
+  enabled: false  # Set to true to enable Azure upload (or set AZURE_UPLOAD_ENABLED=true in .env)
   
   # Storage account settings
   storage:
     # Connection string (can also be set via AZURE_STORAGE_CONNECTION_STRING env var)
-    connection_string: ""  # Leave empty to use environment variable
+    connection_string: ""  # Leave empty to use environment variable (recommended)
     
-    # Container name
+    # Container name (already created: gaussian-splats)
     container_name: "gaussian-splats"
     
     # Upload settings

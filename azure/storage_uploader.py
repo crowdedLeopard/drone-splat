@@ -3,6 +3,8 @@ Azure Blob Storage Uploader
 
 Uploads reconstruction output to Azure Blob Storage for sharing and archival.
 
+Supports both connection string and Azure AD authentication.
+
 Owner: Alex
 """
 
@@ -12,6 +14,7 @@ from loguru import logger
 
 try:
     from azure.storage.blob import BlobServiceClient
+    from azure.identity import DefaultAzureCredential
     AZURE_AVAILABLE = True
 except ImportError:
     AZURE_AVAILABLE = False
@@ -37,11 +40,26 @@ class AzureUploader:
             import os
             connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
         
-        if not connection_string:
-            raise ValueError("Azure Storage connection string not found in config or AZURE_STORAGE_CONNECTION_STRING env var")
+        # Initialize blob service client - try connection string first, then Azure AD
+        if connection_string:
+            logger.info("Using connection string authentication")
+            self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+        else:
+            # Use Azure AD authentication (DefaultAzureCredential)
+            account_url = self.storage_config.get('account_url')
+            if not account_url:
+                # Try to get from environment
+                import os
+                account_name = os.getenv('AZURE_STORAGE_ACCOUNT_NAME')
+                if account_name:
+                    account_url = f"https://{account_name}.blob.core.windows.net"
+                else:
+                    raise ValueError("Either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_NAME must be set")
+            
+            logger.info("Using Azure AD authentication (DefaultAzureCredential)")
+            credential = DefaultAzureCredential()
+            self.blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
         
-        # Initialize blob service client
-        self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
         
         # Ensure container exists

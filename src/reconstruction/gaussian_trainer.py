@@ -49,7 +49,7 @@ class GaussianTrainer:
                 - device: 'cuda' or 'cpu' (default: auto-detect)
         """
         if not GSPLAT_AVAILABLE:
-            raise RuntimeError("gsplat library not available. Install with: pip install gsplat")
+            logger.warning("gsplat library not available - using PyTorch fallback. Install gsplat for better performance: pip install gsplat")
             
         self.num_iterations = config.get('num_iterations', 300)
         self.learning_rate = config.get('learning_rate', 0.01)
@@ -229,6 +229,21 @@ class GaussianTrainer:
         logger.info("Training completed")
         return self.gaussians
         
+    def _eval_sh(self, sh_coeffs: torch.Tensor, viewdir: torch.Tensor) -> torch.Tensor:
+        """
+        Evaluate spherical harmonics to get color.
+        
+        Args:
+            sh_coeffs: (N, K, 3) SH coefficients
+            viewdir: (N, 3) view directions (normalized)
+            
+        Returns:
+            (N, 3) RGB colors
+        """
+        C0 = 0.28209479177387814
+        result = C0 * sh_coeffs[:, 0, :]  # DC component only for now
+        return result + 0.5  # shift to [0,1] range
+    
     def _render_gaussians(self,
                          gaussians: GaussianParams,
                          viewmat: torch.Tensor,
@@ -236,19 +251,143 @@ class GaussianTrainer:
                          cx: float, cy: float,
                          width: int, height: int) -> torch.Tensor:
         """
-        Render Gaussians using gsplat (placeholder - adapt to actual API)
+        Render Gaussians using gsplat or PyTorch fallback.
         
         Returns:
             Rendered image (3, H, W)
         """
-        # This is a simplified placeholder
-        # Actual gsplat usage depends on the specific version and API
-        # Refer to: https://github.com/nerfstudio-project/gsplat
+        if GSPLAT_AVAILABLE:
+            # Primary path: use gsplat
+            try:
+                return self._render_gaussians_gsplat(gaussians, viewmat, fx, fy, cx, cy, width, height)
+            except Exception as e:
+                logger.warning(f"gsplat rendering failed: {e}. Falling back to PyTorch renderer.")
+                return self._render_gaussians_pytorch_fallback(gaussians, viewmat, fx, fy, cx, cy, width, height)
+        else:
+            # Fallback path: PyTorch-only
+            return self._render_gaussians_pytorch_fallback(gaussians, viewmat, fx, fy, cx, cy, width, height)
+    
+    def _render_gaussians_gsplat(self,
+                                 gaussians: GaussianParams,
+                                 viewmat: torch.Tensor,
+                                 fx: float, fy: float,
+                                 cx: float, cy: float,
+                                 width: int, height: int) -> torch.Tensor:
+        """
+        Render using gsplat library.
         
-        # For now, return a dummy tensor
-        # TODO: Implement actual gsplat rasterization
-        logger.warning("Using placeholder rendering - implement actual gsplat rasterization")
-        return torch.zeros((3, height, width), device=self.device)
+        Returns:
+            Rendered image (3, H, W)
+        """
+        # Build intrinsic matrix
+        K = torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], 
+                         dtype=torch.float32, device=self.device)
+        
+        # Compute view directions for SH evaluation
+        N = gaussians.means.shape[0]
+        viewdir = torch.nn.functional.normalize(
+            -(viewmat[:3, 3].unsqueeze(0).expand(N, -1)), 
+            dim=-1
+        )
+        
+        # Get active SH degree (start with 0, progress gradually)
+        active_sh_degree = 0  # For simplicity, use DC only
+        
+        # Evaluate SH to get colors
+        colors = self._eval_sh(gaussians.sh_coeffs, viewdir)
+        colors = torch.clamp(colors, 0, 1)
+        
+        # Call gsplat rasterization
+        renders, alphas, info = rasterization(
+            means=gaussians.means,                              # (N, 3) world positions
+            quats=gaussians.quats,                              # (N, 4) quaternions, wxyz  
+            scales=torch.exp(gaussians.scales),                 # (N, 3) positive scales
+            opacities=torch.sigmoid(gaussians.opacities).squeeze(-1),  # (N,)
+            colors=colors,                                       # (N, 3)
+            viewmats=viewmat.unsqueeze(0),                      # (1, 4, 4) world-to-camera
+            Ks=K.unsqueeze(0),                                  # (1, 3, 3) intrinsics
+            width=width,
+            height=height,
+            render_mode="RGB",
+            sh_degree=active_sh_degree,
+        )
+        rendered_image = renders[0].permute(2, 0, 1)  # (3, H, W)
+        return rendered_image
+    
+    def _render_gaussians_pytorch_fallback(self,
+                                          gaussians: GaussianParams,
+                                          viewmat: torch.Tensor,
+                                          fx: float, fy: float,
+                                          cx: float, cy: float,
+                                          width: int, height: int) -> torch.Tensor:
+        """PyTorch-only differentiable Gaussian rasterizer fallback."""
+        import torch.nn.functional as F
+        
+        N = gaussians.means.shape[0]
+        device = self.device
+        
+        # Build camera intrinsic matrix
+        K = torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], 
+                          dtype=torch.float32, device=device)
+        
+        # Transform means to camera space
+        # viewmat is 4x4 world-to-camera
+        ones = torch.ones(N, 1, device=device)
+        means_h = torch.cat([gaussians.means, ones], dim=1)  # (N, 4)
+        means_cam = (viewmat @ means_h.T).T  # (N, 4)
+        
+        # Keep only points in front of camera
+        z = means_cam[:, 2]  # (N,)
+        valid = z > 0.01
+        if valid.sum() == 0:
+            return torch.zeros(3, height, width, device=device)
+        
+        # Project to screen
+        means_cam_valid = means_cam[valid]  # (M, 4)
+        z_valid = means_cam_valid[:, 2]
+        u = (means_cam_valid[:, 0] / z_valid * fx + cx)  # pixel x
+        v = (means_cam_valid[:, 1] / z_valid * fy + cy)  # pixel y
+        
+        # Get colors from DC SH component
+        C0 = 0.28209479177387814
+        sh_dc = gaussians.sh_coeffs[valid, 0, :]  # (M, 3) DC component
+        colors = torch.clamp(sh_dc * C0 + 0.5, 0, 1)  # (M, 3)
+        
+        # Get scales and opacities
+        scales_valid = torch.exp(gaussians.scales[valid])  # (M, 3)
+        sigma = scales_valid.mean(dim=1) / z_valid * fx  # projected radius in pixels
+        sigma = sigma.clamp(min=0.5, max=50.0)
+        opacities_valid = torch.sigmoid(gaussians.opacities[valid].squeeze(-1))  # (M,)
+        
+        # Sort back to front
+        sort_idx = torch.argsort(z_valid, descending=True)
+        u, v, colors, sigma, opacities_valid = [t[sort_idx] for t in [u, v, colors, sigma, opacities_valid]]
+        
+        # Render: accumulate Gaussian splats into image
+        # Use a vectorized approach with limited resolution
+        canvas = torch.zeros(3, height, width, device=device)
+        alpha_acc = torch.zeros(height, width, device=device)
+        
+        # Create coordinate grids
+        ys = torch.arange(height, dtype=torch.float32, device=device)
+        xs = torch.arange(width, dtype=torch.float32, device=device)
+        
+        M = min(u.shape[0], 500)  # limit to 500 Gaussians for speed
+        for i in range(M):
+            # 2D Gaussian contribution
+            dx = xs.unsqueeze(0) - u[i]  # (1, W)
+            dy = ys.unsqueeze(1) - v[i]  # (H, 1)
+            dist2 = (dx**2 + dy**2) / (2.0 * sigma[i]**2 + 1e-8)
+            gaussian_weight = torch.exp(-dist2.clamp(max=20))  # (H, W)
+            
+            alpha = opacities_valid[i] * gaussian_weight  # (H, W)
+            transmittance = 1.0 - alpha_acc
+            contrib = transmittance * alpha  # (H, W)
+            
+            canvas = canvas + contrib.unsqueeze(0) * colors[i].view(3, 1, 1)
+            alpha_acc = alpha_acc + contrib
+        
+        return canvas.clamp(0, 1)
         
     def get_gaussians_numpy(self) -> Dict[str, np.ndarray]:
         """

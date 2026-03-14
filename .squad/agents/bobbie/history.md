@@ -30,6 +30,27 @@
 - **Blender integration:** Requires Gaussian Splatting addon (https://github.com/ReshotAI/gaussian-splatting-blender-addon)
 - **Trade-offs documented:** Web viewer for demo/quick viewing, Blender for professional quality/compositing
 
+### Viewer Consolidation & Fixes (2026-03-13)
+- **Problem:** Two conflicting server implementations (viewer_server.py, web_viewer.py) and two HTML files (index.html, viewer.html)
+- **Solution:** Unified viewer.html with working Three.js implementation
+- **Removed loguru dependency:** Changed viewer_server.py to use standard logging (loguru not installed)
+- **Added /api/latest endpoint:** Integrated web_viewer.py's polling endpoint into viewer_server.py
+- **Implemented PLY rendering:** Full Three.js r128 implementation with PLY parser for binary and ASCII formats
+- **Features implemented:**
+  - Polls /api/latest every 2 seconds for new .ply files
+  - Renders point clouds with vertex colors (or height-based gradient if no colors)
+  - Auto-rotates at 0.003 rad/frame for demo appeal
+  - Dark theme (#1a1a1a background) optimized for 3D point cloud viewing
+  - Status indicators: loading (orange), ready (green), error (red)
+  - Displays point count, file size, and last update time
+  - Supports both binary and ASCII PLY formats
+- **Technical details:**
+  - Three.js BufferGeometry with position + color attributes
+  - PointsMaterial with vertexColors and sizeAttenuation
+  - Auto-calculates camera distance based on bounding sphere
+  - Point size: 0.02 (optimal for Gaussian splat visualization)
+  - Serves from project root to access both viewer HTML and output directory
+
 ### Files Created
 - `src/viewer/__init__.py` — Module exports
 - `src/viewer/file_watcher.py` — Watchdog-based .ply file monitor with debouncing
@@ -41,9 +62,12 @@
 - `scripts/setup_viewer.ps1` — Dependency checker and setup automation
 - `docs/viewer_setup.md` — Comprehensive setup guide (web, SuperSplat, Blender)
 
+### Files Modified
+- `src/viewer/viewer_server.py` — Replaced loguru with standard logging, added /api/latest endpoint, serves viewer.html
+- `src/viewer/viewer.html` — Complete rewrite with Three.js PLY rendering
+
 ### Next Steps for Integration
 - Test with actual .ply output from Naomi's reconstruction module
-- Integrate antimatter15/splat.js for real 3D rendering (currently placeholder canvas)
 - Optimize for large files (typical drone splats: 50-500 MB)
 - Consider streaming/LOD for better performance with large datasets
 

@@ -1,42 +1,59 @@
 """
-Real-Time 3D Gaussian Splatting Pipeline Orchestrator
+Real-Time 3D Gaussian Splatting Pipeline - Main Entry Point
 
-This is the main entry point for the reconstruction pipeline.
-Coordinates RTMP ingestion, frame extraction, 3D reconstruction, and visualization.
+Coordinates the working Path B architecture:
+RTMPIngestor → GaussianReconstructor → ViewerServer + AzureUploader
 
 Author: Holden (Lead Architect)
+Architecture Decision: Path B Unification (2026-03-13)
 """
 
 import sys
 import signal
 import time
 import threading
+import queue
+import logging
 from pathlib import Path
-from typing import Optional
 import yaml
-from loguru import logger
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utils.logger import setup_logging
-from ingestion.rtmp_listener import RTMPListener
-from ingestion.frame_extractor import FrameExtractor
-from reconstruction.slam_processor import SLAMProcessor
+from ingestion.rtmp_ingestor import RTMPIngestor
+from reconstruction.reconstructor import GaussianReconstructor
 from viewer.viewer_server import ViewerServer
+from utils.azure_uploader import AzureUploader
+
+# Setup standard logging (not loguru - may not be installed)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 class PipelineOrchestrator:
-    """Orchestrates the entire 3D reconstruction pipeline"""
+    """Orchestrates the 3D reconstruction pipeline using Path B components"""
     
     def __init__(self, config_path: str = "config/config.yaml"):
         self.config = self._load_config(config_path)
         self.running = False
-        self.components = {}
         
-        # Setup logging
-        setup_logging(self.config.get('logging', {}))
-        logger.info("Initializing Real-Time 3D Gaussian Splatting Pipeline")
+        # Thread-safe communication
+        self.frame_queue = queue.Queue(maxsize=100)
+        self.stop_event = threading.Event()
+        
+        # Components
+        self.rtmp_ingestor = None
+        self.reconstructor = None
+        self.viewer = None
+        self.azure_uploader = None
+        
+        # Threads
+        self.ingestor_thread = None
+        
+        logger.info("Initializing Real-Time 3D Gaussian Splatting Pipeline (Path B)")
         
         # Initialize directories
         self._initialize_directories()
@@ -60,7 +77,6 @@ class PipelineOrchestrator:
         dirs = [
             self.config['ingestion']['frames_dir'],
             self.config['reconstruction']['output_dir'],
-            self.config['reconstruction']['model_weights_dir'],
         ]
         
         if self.config['logging']['file']['enabled']:
@@ -77,28 +93,54 @@ class PipelineOrchestrator:
     def _initialize_components(self):
         """Initialize pipeline components"""
         try:
-            # RTMP Listener (Amos's domain)
-            logger.info("Initializing RTMP listener...")
-            self.components['rtmp'] = RTMPListener(self.config['rtmp'])
+            # Build RTMP URL from config
+            rtmp_url = (
+                f"rtmp://{self.config['rtmp']['host']}:{self.config['rtmp']['port']}/"
+                f"{self.config['rtmp']['app']}/{self.config['rtmp']['stream_key']}"
+            )
             
-            # Frame Extractor (Amos's domain)
-            logger.info("Initializing frame extractor...")
-            self.components['extractor'] = FrameExtractor(self.config['ingestion'])
+            # RTMPIngestor config
+            ingestor_config = {
+                'rtmp_url': rtmp_url,
+                'frame_rate': self.config['ingestion']['frame_rate'],
+                'width': 1920,
+                'height': 1080,
+            }
             
-            # 3D Reconstruction (Naomi's domain)
-            logger.info("Initializing 3D reconstruction processor...")
-            self.components['reconstruction'] = SLAMProcessor(self.config['reconstruction'])
+            logger.info("Initializing RTMP ingestor...")
+            self.rtmp_ingestor = RTMPIngestor(ingestor_config)
             
-            # Viewer Server (Bobbie's domain)
+            # GaussianReconstructor config
+            reconstructor_config = {
+                'output_dir': self.config['reconstruction']['output_dir'],
+                'output_format': self.config['reconstruction']['output_format'],
+                'reconstruction_interval': self.config['reconstruction'].get('update_interval_sec', 5.0),
+                'min_keyframes': self.config['reconstruction'].get('window_size', 10),
+                'frame_selector': {},
+                'pose_estimator': {},
+                'gaussian_trainer': {
+                    'num_iterations': 300,
+                    'device': self.config['reconstruction']['device']
+                },
+            }
+            
+            logger.info("Initializing Gaussian reconstructor...")
+            self.reconstructor = GaussianReconstructor(reconstructor_config)
+            
+            # Viewer Server
             if self.config['viewer']['type'] == 'web':
                 logger.info("Initializing web viewer...")
-                self.components['viewer'] = ViewerServer(self.config['viewer'])
+                self.viewer = ViewerServer(self.config['viewer'])
             
-            # Azure Uploader (Alex's domain) - optional
+            # Azure Uploader (optional)
             if self.config['azure']['enabled']:
                 logger.info("Initializing Azure storage uploader...")
-                from azure.storage_uploader import AzureUploader
-                self.components['azure'] = AzureUploader(self.config['azure'])
+                azure_config = {
+                    'enabled': True,
+                    'connection_string': self.config['azure']['storage'].get('connection_string', ''),
+                    'container_name': self.config['azure']['storage']['container_name'],
+                }
+                self.azure_uploader = AzureUploader(azure_config)
             
             logger.info("All components initialized successfully")
             
@@ -115,38 +157,60 @@ class PipelineOrchestrator:
         self.running = True
         
         try:
-            # Start viewer first (if enabled)
-            if 'viewer' in self.components:
+            # 1. Start viewer first
+            if self.viewer:
                 logger.info("Starting viewer server...")
-                self.components['viewer'].start()
+                self.viewer.start()
+                logger.info(f"View reconstruction at http://localhost:{self.config['viewer']['web']['port']}")
             
-            # Start RTMP listener
-            logger.info("Starting RTMP listener...")
-            logger.info(f"Waiting for RTMP stream at rtmp://<your-ip>:{self.config['rtmp']['port']}/{self.config['rtmp']['app']}/{self.config['rtmp']['stream_key']}")
-            self.components['rtmp'].start()
+            # 2. Start RTMP ingestor in background thread
+            logger.info("Starting RTMP ingestor...")
+            rtmp_url = (
+                f"rtmp://<your-ip>:{self.config['rtmp']['port']}/"
+                f"{self.config['rtmp']['app']}/{self.config['rtmp']['stream_key']}"
+            )
+            logger.info(f"Waiting for RTMP stream at {rtmp_url}")
             
-            # Start frame extractor
-            logger.info("Starting frame extractor...")
-            self.components['extractor'].start(self.components['rtmp'])
-            
-            # Start reconstruction processor
-            logger.info("Starting 3D reconstruction...")
-            self.components['reconstruction'].start(self.components['extractor'])
-            
-            # Setup reconstruction completion callback
-            self.components['reconstruction'].on_update(self._on_reconstruction_update)
-            
-            # Start monitoring thread
-            monitor_thread = threading.Thread(target=self._monitor_pipeline, daemon=True)
-            monitor_thread.start()
+            self.ingestor_thread = threading.Thread(
+                target=self.rtmp_ingestor.run,
+                args=(self.frame_queue, self.stop_event),
+                daemon=True
+            )
+            self.ingestor_thread.start()
             
             logger.info("=" * 60)
             logger.info("Pipeline running. Press Ctrl+C to stop.")
             logger.info("=" * 60)
             
-            # Main loop - keep running
+            # 3. Main loop: consume frames from queue, feed to reconstructor
+            frame_count = 0
             while self.running:
-                time.sleep(1)
+                try:
+                    # Get frame from queue with timeout
+                    frame_data = self.frame_queue.get(timeout=1.0)
+                    
+                    frame = frame_data['frame']
+                    timestamp = frame_data['timestamp']
+                    
+                    # Feed to reconstructor
+                    updated = self.reconstructor.add_frame(frame, timestamp)
+                    
+                    if updated:
+                        # Reconstruction was updated - trigger callbacks
+                        output_path = self.reconstructor.get_output_path()
+                        if output_path:
+                            self._on_reconstruction_update(output_path)
+                    
+                    frame_count += 1
+                    if frame_count % 10 == 0:
+                        logger.debug(f"Processed {frame_count} frames")
+                    
+                    self.frame_queue.task_done()
+                    
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing frame: {e}", exc_info=True)
                 
         except KeyboardInterrupt:
             logger.info("Received shutdown signal (Ctrl+C)")
@@ -156,51 +220,22 @@ class PipelineOrchestrator:
             self.stop()
             raise
     
-    def _on_reconstruction_update(self, output_file: Path):
+    def _on_reconstruction_update(self, output_path: str):
         """Called when reconstruction produces new output"""
-        logger.info(f"Reconstruction updated: {output_file}")
+        logger.info(f"Reconstruction updated: {output_path}")
+        
+        # Notify viewer to refresh
+        if self.viewer:
+            self.viewer.notify_update(Path(output_path))
         
         # Upload to Azure if enabled
-        if 'azure' in self.components and self.config['azure']['upload_on_update']:
+        if self.azure_uploader and self.config['azure']['storage'].get('upload_on_update', True):
             try:
-                self.components['azure'].upload(output_file)
-                logger.info("Uploaded to Azure Blob Storage")
+                url = self.azure_uploader.upload_if_enabled(output_path)
+                if url:
+                    logger.info(f"Uploaded to Azure: {url}")
             except Exception as e:
                 logger.error(f"Azure upload failed: {e}")
-        
-        # Notify viewer to refresh (if applicable)
-        if 'viewer' in self.components:
-            self.components['viewer'].notify_update(output_file)
-    
-    def _monitor_pipeline(self):
-        """Monitor pipeline health and performance"""
-        interval = self.config['pipeline'].get('health_check_interval', 10)
-        report_interval = self.config['pipeline'].get('report_interval_sec', 60)
-        last_report = time.time()
-        
-        while self.running:
-            time.sleep(interval)
-            
-            # Check component health
-            for name, component in self.components.items():
-                if hasattr(component, 'is_healthy'):
-                    if not component.is_healthy():
-                        logger.warning(f"Component '{name}' is unhealthy")
-            
-            # Periodic performance report
-            if self.config['pipeline'].get('monitor_performance', False):
-                if time.time() - last_report > report_interval:
-                    self._report_performance()
-                    last_report = time.time()
-    
-    def _report_performance(self):
-        """Report pipeline performance metrics"""
-        logger.info("--- Pipeline Performance ---")
-        
-        for name, component in self.components.items():
-            if hasattr(component, 'get_stats'):
-                stats = component.get_stats()
-                logger.info(f"{name}: {stats}")
     
     def stop(self):
         """Stop the pipeline gracefully"""
@@ -209,30 +244,17 @@ class PipelineOrchestrator:
         
         logger.info("Stopping pipeline...")
         self.running = False
+        self.stop_event.set()
         
-        timeout = self.config['pipeline'].get('shutdown_timeout', 30)
+        # Stop ingestor thread
+        if self.ingestor_thread and self.ingestor_thread.is_alive():
+            logger.info("Stopping RTMP ingestor...")
+            self.ingestor_thread.join(timeout=5)
         
-        # Stop components in reverse order
-        components_to_stop = [
-            ('reconstruction', 'reconstruction processor'),
-            ('extractor', 'frame extractor'),
-            ('rtmp', 'RTMP listener'),
-            ('viewer', 'viewer'),
-            ('azure', 'Azure uploader'),
-        ]
-        
-        for comp_name, display_name in components_to_stop:
-            if comp_name in self.components:
-                try:
-                    logger.info(f"Stopping {display_name}...")
-                    component = self.components[comp_name]
-                    
-                    if hasattr(component, 'stop'):
-                        component.stop(timeout=timeout)
-                    
-                    logger.info(f"{display_name} stopped")
-                except Exception as e:
-                    logger.error(f"Error stopping {display_name}: {e}")
+        # Stop viewer
+        if self.viewer:
+            logger.info("Stopping viewer...")
+            self.viewer.stop()
         
         logger.info("Pipeline stopped")
 

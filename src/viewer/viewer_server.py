@@ -10,8 +10,11 @@ Owner: Bobbie
 import http.server
 import socketserver
 import threading
+import json
 from pathlib import Path
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ViewerServer:
@@ -19,10 +22,11 @@ class ViewerServer:
     
     def __init__(self, config: dict):
         self.config = config
-        self.web_config = config['web']
-        self.host = self.web_config['host']
-        self.port = self.web_config['port']
-        self.auto_refresh = self.web_config['auto_refresh_interval']
+        self.web_config = config.get('web', {})
+        self.host = self.web_config.get('host', 'localhost')
+        self.port = self.web_config.get('port', 8080)
+        self.auto_refresh = self.web_config.get('auto_refresh_interval', 2000)
+        self.output_dir = Path(config.get('output_dir', './output'))
         
         self.running = False
         self.server = None
@@ -44,14 +48,45 @@ class ViewerServer:
     def _run_server(self):
         """Run HTTP server"""
         try:
-            handler = http.server.SimpleHTTPRequestHandler
-            
-            # Change to viewer directory
             viewer_dir = Path(__file__).parent
+            output_dir = self.output_dir
             
-            class CustomHandler(handler):
+            class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 def __init__(self, *args, **kwargs):
-                    super().__init__(*args, directory=str(viewer_dir), **kwargs)
+                    super().__init__(*args, directory=str(viewer_dir.parent.parent), **kwargs)
+                
+                def do_GET(self):
+                    if self.path == "/" or self.path == "/viewer" or self.path == "/viewer/":
+                        self.path = "/src/viewer/viewer.html"
+                    elif self.path == "/api/latest":
+                        self.send_latest_file_info()
+                        return
+                    super().do_GET()
+                
+                def send_latest_file_info(self):
+                    """API endpoint to get latest .ply file info."""
+                    ply_files = sorted(output_dir.glob("*.ply"), key=lambda f: f.stat().st_mtime, reverse=True)
+                    
+                    if ply_files:
+                        latest = ply_files[0]
+                        info = {
+                            "filename": latest.name,
+                            "path": f"/output/{latest.name}",
+                            "size": latest.stat().st_size,
+                            "modified": latest.stat().st_mtime,
+                            "count": len(ply_files)
+                        }
+                    else:
+                        info = {"filename": None, "path": None, "size": 0, "modified": 0, "count": 0}
+                    
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(info).encode())
+                
+                def log_message(self, format, *args):
+                    pass
             
             with socketserver.TCPServer((self.host, self.port), CustomHandler) as httpd:
                 self.server = httpd
