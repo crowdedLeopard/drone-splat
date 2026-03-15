@@ -97,3 +97,90 @@ Frames delivered to `threading.Queue` as dict with numpy BGR array, timestamp, f
 **Decision Document:**
 - `.squad\decisions\inbox\amos-dep-fixes.md`
 
+### CUDA Stack Installation (2026-03-14)
+
+**Context:**
+Holden's architecture investigation found PyTorch 2.10.0+cpu installed (GPU invisible), blocking gsplat and MASt3r GPU features. System has RTX 500 Ada with 4GB VRAM and CUDA 13.0 driver, but torch wasn't installed with CUDA support.
+
+**Actions Taken:**
+1. **Uninstalled CPU-only PyTorch:**
+   - `pip uninstall torch torchvision torchaudio -y`
+   - Removed PyTorch 2.10.0, torchvision 0.25.0
+
+2. **Installed PyTorch with CUDA 12.1:**
+   - `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
+   - Successfully installed PyTorch 2.5.1+cu121, torchvision 0.20.1+cu121, torchaudio 2.5.1+cu121
+   - Download size: ~2.5GB, took ~5 minutes
+   - GPU now visible: NVIDIA RTX 500 Ada Generation Laptop GPU (4.3GB VRAM)
+
+3. **Installed gsplat:**
+   - `pip install gsplat`
+   - Installed gsplat 1.5.3 with dependencies (ninja, jaxtyping, rich)
+   - Import successful, but **JIT CUDA compilation blocked**
+
+4. **Cloned MASt3r to tools/:**
+   - `git clone --recursive https://github.com/naver/mast3r.git tools/mast3r`
+   - Cloned with submodules: dust3r and croco
+   - Installed requirements: scikit-learn, joblib, threadpoolctl
+   - Installed dust3r requirements: einops, huggingface-hub, etc.
+
+5. **Downloaded MASt3r model weights:**
+   - Model: naver/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric
+   - Size: 2.75GB from HuggingFace Hub
+   - Download time: ~3 minutes
+   - Parameters: 688,638,856 (~688M)
+   - Successfully loaded on first run
+
+**Key Technical Issues:**
+
+**gsplat CUDA Compilation Blocked:**
+- Visual Studio 2026 (v18.3.3) installed but not supported by CUDA 12.9
+- Error: "unsupported Microsoft Visual Studio version! Only 2017-2022 supported"
+- gsplat JIT compilation requires MSVC compiler for CUDA kernels
+- Attempted fix with `-allow-unsupported-compiler` flag failed (env var not passed through)
+- **Workaround:** PyTorch fallback rasterization works (slower, ~100x, but functional)
+
+**MASt3r RoPE2D Warning:**
+- "Warning: cannot find cuda-compiled version of RoPE2D, using slow pytorch version"
+- Not blocking — model works, just slightly slower
+- Pre-compiled CUDA extension for RoPE2D not available, falls back to PyTorch
+
+**Versions Installed:**
+- PyTorch: 2.5.1+cu121
+- gsplat: 1.5.3
+- ninja: 1.13.0
+- MASt3r: Latest from GitHub (2024 commits)
+- dust3r: Latest submodule (commit 3cc8c88)
+- croco: Latest submodule (commit d7de070)
+
+**System Compatibility:**
+- CUDA driver: 13.0 (supports CUDA 12.1 runtime via driver > runtime compatibility)
+- Visual Studio: 2026 (v18.3.3) — NOT compatible with CUDA 12.9 for JIT compilation
+- Python: 3.11
+- Windows: OneDrive - Microsoft sync path (works fine)
+
+**Files Updated:**
+- requirements.txt: Updated PyTorch and gsplat notes with CUDA installation instructions
+- .gitignore: Already had `tools/` entry (no changes needed)
+- Created verify_stack.py: Full CUDA stack verification script
+- Created test_gsplat.py: gsplat CUDA render test (for debugging)
+
+**Performance Expectations:**
+- MASt3r inference: ~1-2s per image pair on RTX 500 Ada (estimate)
+- gsplat PyTorch fallback: ~10-50ms per 512x512 frame (acceptable for demo)
+- gsplat CUDA (if compiled): ~0.1-1ms per frame (100x faster, but blocked)
+
+**Decision Document:**
+- `.squad\decisions\inbox\amos-cuda-stack.md`
+
+**Next Steps for Naomi:**
+1. Use MASt3r immediately for pose estimation (fully working)
+2. Use gsplat with PyTorch fallback rasterization (works without CUDA JIT)
+3. Future: Fix MSVC/CUDA compatibility or downgrade to VS 2022 for gsplat CUDA compilation
+
+**Timing:**
+- Total installation time: ~15 minutes (mostly downloads)
+- PyTorch download: ~5 min
+- MASt3r model download: ~3 min
+- Testing and verification: ~7 min
+

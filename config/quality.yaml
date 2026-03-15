@@ -1,0 +1,32 @@
+# Best-quality Gaussian Splatting configuration
+# Run with: python demo.py  (uses this by default for quality mode)
+
+reconstruction:
+  use_mast3r: true
+  
+  mast3r:
+    model_name: "naver/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric"
+    image_size: 512
+    confidence_threshold: 0.5
+    device: "cuda"
+  
+  gaussian_trainer:
+    num_iterations: 3000
+    sh_degree: 3
+    learning_rate: 0.00016
+    densify_from_iter: 500
+    densify_until_iter: 2000
+    densify_interval: 100
+    densify_grad_threshold: 0.0002
+    prune_opacity_threshold: 0.005
+    device: "cuda"
+  
+  output_dir: "data/output"
+  output_format: "ply"
+  min_keyframes: 10
+  reconstruction_interval: 5.0
+
+keyframe:
+  min_interval: 0.3
+  max_interval: 2.0
+  motion_threshold: 0.02

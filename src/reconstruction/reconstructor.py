@@ -19,9 +19,15 @@ from typing import Optional, List
 import yaml
 
 from .frame_selector import FrameSelector, KeyFrame
-from .pose_estimator import PoseEstimator
+from .pose_estimator import PoseEstimator, CameraPose
 from .gaussian_trainer import GaussianTrainer
 from .ply_writer import PLYWriter
+
+try:
+    from .mast3r_estimator import MASt3rEstimator, MASt3rResult
+    MAST3R_AVAILABLE = MASt3rEstimator.is_available()
+except ImportError:
+    MAST3R_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,7 +63,19 @@ class GaussianReconstructor:
         
         # Initialize components
         self.frame_selector = FrameSelector(config.get('frame_selector', {}))
-        self.pose_estimator = PoseEstimator(config.get('pose_estimator', {}))
+        
+        # Choose pose estimator based on MASt3r availability
+        use_mast3r = config.get('use_mast3r', True) and MAST3R_AVAILABLE
+        if use_mast3r:
+            logger.info("Using MASt3r for pose estimation (best quality)")
+            self.pose_estimator = MASt3rEstimator(config.get('mast3r', {}))
+            self.use_mast3r = True
+        else:
+            if config.get('use_mast3r', True) and not MAST3R_AVAILABLE:
+                logger.warning("MASt3r requested but not available - falling back to SIFT")
+            self.pose_estimator = PoseEstimator(config.get('pose_estimator', {}))
+            self.use_mast3r = False
+            
         self.gaussian_trainer = GaussianTrainer(config.get('gaussian_trainer', {}))
         self.ply_writer = PLYWriter()
         
@@ -123,27 +141,49 @@ class GaussianReconstructor:
                 
             images = [kf.image for kf in keyframes]
             
-            # Step 1: Estimate camera poses
-            logger.info("Estimating camera poses...")
-            poses = self.pose_estimator.estimate_poses_sequential(images)
-            
-            if len(poses) < 2:
-                logger.error("Failed to estimate poses")
-                return False
+            # Step 1: Estimate camera poses and get point cloud
+            if self.use_mast3r:
+                logger.info("Running MASt3r reconstruction...")
+                result = self.pose_estimator.reconstruct(images)
+                points = result.points
+                colors = result.colors
                 
-            # Step 2: Generate point cloud via triangulation
-            logger.info("Generating point cloud...")
-            points, colors = self.pose_estimator.get_point_cloud(images, poses)
+                # Convert MASt3r poses to CameraPose objects
+                poses = []
+                for i, p in enumerate(result.poses):
+                    # p is (4, 4) camera-to-world
+                    # CameraPose expects world-to-camera (T matrix)
+                    T = np.linalg.inv(p)
+                    pose = CameraPose(R=T[:3, :3], t=T[:3, 3:], frame_id=i)
+                    poses.append(pose)
+                
+                camera_matrix = result.intrinsics[0] if result.intrinsics else None
+                
+                if camera_matrix is None:
+                    logger.error("MASt3r did not return camera intrinsics")
+                    return False
+                    
+            else:
+                # Original SIFT path
+                logger.info("Estimating camera poses...")
+                poses = self.pose_estimator.estimate_poses_sequential(images)
+                
+                if len(poses) < 2:
+                    logger.error("Failed to estimate poses")
+                    return False
+                    
+                # Step 2: Generate point cloud via triangulation
+                logger.info("Generating point cloud...")
+                points, colors = self.pose_estimator.get_point_cloud(images, poses)
+                
+                camera_matrix = self.pose_estimator.K
             
             if len(points) < 100:
                 logger.error(f"Not enough points for reconstruction: {len(points)}")
                 return False
-                
-            logger.info(f"Point cloud generated: {len(points)} points")
             
             # Step 3: Train Gaussians
             logger.info("Training Gaussian Splats...")
-            camera_matrix = self.pose_estimator.K
             
             gaussians = self.gaussian_trainer.train(
                 points, colors, images, poses, camera_matrix
